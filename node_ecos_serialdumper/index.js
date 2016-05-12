@@ -43,9 +43,6 @@ sport.on("data", function(data){
 	parser(data);
 });
 
-String.prototype.toCommand = function(){
-	return this+"\n";
-}
 Array.prototype.clean = function() {
   for (var i = 0; i < this.length; i++) {
     if (this[i].trim().length <= 0) {         
@@ -67,7 +64,7 @@ var current_state = states.IDLE;
 var currentFile;
 
 function comwrite(data){
-	sport.write(data, function(){
+	sport.write(data + "\n", function(){
 		sport.drain();
 	});
 }
@@ -123,12 +120,12 @@ function parser(data){
 function nextSection(){
 	var name = Object.keys(sections)[curno];
 	console.log("Switching to region "+name);
-	comwrite("cd /flash".toCommand());
+	comwrite("cd /flash");
 
-	comwrite("close".toCommand());
-	comwrite("deinit".toCommand());
-	comwrite("init".toCommand());
-	comwrite("open "+name.toCommand());
+	comwrite("close");
+	comwrite("deinit");
+	comwrite("init");
+	comwrite("open "+name);
 
 	bytesWritten = 0;
 	
@@ -143,7 +140,7 @@ function setupEvents(com){
 	Lock_Rts.on("ready", function(){
 		console.log("Sending Read at offset "+bytesWritten+"...");
 		/* Issue a 'read 4 8192' command, and parse its result in the event handler */ 
-		var cmd = "read 4 8192 "+bytesWritten.toString().toCommand();
+		var cmd = "read 4 8192 "+bytesWritten.toString();
 		console.log(cmd);
 		comwrite(cmd);
 		bytesWritten += 8192;
