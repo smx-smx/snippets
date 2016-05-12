@@ -1,0 +1,15 @@
+{
+	"name": "ecos_serialdump",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Smx",
+	"license": "",
+	"dependencies": {
+		"serialport": "~2.0.5",
+		"lodash": "~3.10.1"
+	}
+}
