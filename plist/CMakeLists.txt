@@ -1,1 +1,1 @@
-add_executable(plist main.c plist.c)
+add_executable(plist example.c plist.c)
