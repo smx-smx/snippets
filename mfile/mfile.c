@@ -13,10 +13,12 @@
 #include <errno.h>
 #include "mfile.h"
 
+#define PERMS_DEFAULT (mode_t)0666
+
 /*
  * Creates a new mfile structure
  */
-MFILE *mfile_new(){
+inline MFILE *mfile_new(){
 	MFILE *mem = calloc(1, sizeof(MFILE));
 	return mem;
 }
@@ -54,14 +56,15 @@ void *_mfile_map(MFILE *file, size_t mapSize, int mapFlags){
 		//err_exit("mmap failed: %s\n", strerror(errno));
 		return NULL;
 	}
+	
 	return file->pMem;
 }
 
-void *mfile_map(MFILE *file, size_t mapSize){
+inline void *mfile_map(MFILE *file, size_t mapSize){
 	return _mfile_map(file, mapSize, MAP_SHARED);
 }
 
-void *mfile_map_private(MFILE *file, size_t mapSize){
+inline void *mfile_map_private(MFILE *file, size_t mapSize){
 	return _mfile_map(file, mapSize, MAP_PRIVATE);
 }
 
@@ -70,7 +73,7 @@ void *mfile_map_private(MFILE *file, size_t mapSize){
  */
 MFILE *_mopen(const char *path, int oflags, int mapFlags){
 	MFILE *file = mfile_new();
-	file->fd = open(path, oflags);
+	file->fd = open(path, oflags, PERMS_DEFAULT);
 	if(file->fd < 0){
 		goto e0_ret;
 	}
@@ -103,12 +106,43 @@ MFILE *_mopen(const char *path, int oflags, int mapFlags){
 		return NULL;
 }
 
-MFILE *mopen(const char *path, int oflags){
+inline MFILE *mopen(const char *path, int oflags){
 	return _mopen(path, oflags, MAP_SHARED);
 }
 
-MFILE *mopen_private(const char *path, int oflags){
+inline MFILE *mopen_private(const char *path, int oflags){
 	return _mopen(path, oflags, MAP_PRIVATE);
+}
+
+
+int mgetc(MFILE *stream){
+	if(stream->offset > msize(stream))
+		return EOF;
+	return (unsigned int)(*(&((uint8_t *)(stream->pMem))[stream->offset++]));
+}
+int mputc(int c, MFILE *stream){
+	if(stream->offset > msize(stream))
+		return EOF;
+	((uint8_t *)(stream->pMem))[stream->offset] = (uint8_t)c;
+	stream->offset++;
+	return c;
+}
+
+
+int cgetc(cursor_t *stream){
+	if(stream->offset > stream->size)
+		return EOF;
+	return (unsigned int)(
+		*(&(
+			((unsigned char *)(stream->ptr))[stream->offset++]
+		))
+	);
+}
+int cputc(int c, cursor_t *stream){
+	if(stream->offset > stream->size)
+		return EOF;
+	((unsigned char *)(stream->ptr))[stream->offset++] = (unsigned char)c;
+	return c;
 }
 
 /*
@@ -141,7 +175,7 @@ MFILE *_mfopen(const char *path, const char *mode, int mapFlags){
 	if(_mfile_update_info(file, path) < 0)
 		goto e1_ret;
 
-	if(strstr(mode, "r") != NULL){
+	if(strstr(mode, "r") != NULL || strstr(mode, "+") != NULL){
 		file->prot |= PROT_READ;
 	}
 	if(strstr(mode, "w") != NULL){
@@ -164,7 +198,7 @@ MFILE *_mfopen(const char *path, const char *mode, int mapFlags){
 		return NULL;
 }
 
-MFILE *mfopen(const char *path, const char *mode){
+inline MFILE *mfopen(const char *path, const char *mode){
 	return _mfopen(path, mode, MAP_SHARED);
 }
 
