@@ -13,21 +13,24 @@
 #define zalloc(size) calloc(1, size)
 #define strlencmp(x, y) strncmp(x, y, strlen(y))
 
-#ifdef DEBUG
-const static int plist_debug = true;
-#else
-const static int plist_debug = false;
-#endif
+static unsigned int PLIST_DEBUG = false;
+static unsigned int PLIST_FORCE = false;
 
 void debug(const char *format, ...);
 void plist_node_free(PLIST_NODE *node);
 
+void PLIST_SET_DEBUG(int value){
+	PLIST_DEBUG = value;
+}
+void PLIST_FORCE_LOAD(int value){
+	PLIST_FORCE = value;
+}
 
 int plist_readTo(PLIST *plist, char *to, int size){
 	int count;
 	for(count=0; ; plist->offset++, plist->data++, count++){
 		if(!strncmp(plist->data, to, size)){
-			return count-1;
+			return count;
 		}
 		if(plist_feof(plist)){
 			return -1;
@@ -38,7 +41,7 @@ int plist_readTo(PLIST *plist, char *to, int size){
 int plist_nextLine(PLIST *plist){
 	int ret = PLIST_READTO(plist, "\n");
 	plist->data++;
-	if(++plist->offset > plist->size || !ret){
+	if(ret < 0 || ++plist->offset > plist->size){
 		return ret;
 	}
 	return true;
@@ -65,7 +68,7 @@ int plist_feof(PLIST *plist){
 }
 
 void debug(const char *format, ...){
-	if(plist_debug){
+	if(PLIST_DEBUG){
 		va_list args;
 		va_start(args, format);
 		vprintf(format, args);
@@ -108,12 +111,22 @@ int plist_isValid(PLIST *plist){
 		if(!plist_nextLine(plist)) return false;
 	}
 	int readCount = PLIST_READTO(plist, "<plist");
-	if(!strlencmp(plist->data, "<plist") || readCount <= 0){
+	if(readCount > 0 && !strlencmp(plist->data, "<plist")){
 		debug("<plist matches\n");
 		plistCheckLevel++;
 	} else {
-		debug("Fatal!, cannot find the root node!\n");
-		return false;
+		if(PLIST_FORCE){
+			plist_rewind(plist);
+			int read = PLIST_READTO(plist, "<");
+			if(read < 0){
+				fprintf(stderr, "Not a valid plist file\n");
+				return false;
+			}
+			return true;
+		} else {
+			debug("Fatal!, cannot find the root node!\n");
+			return false;
+		}
 	}
 	if(plistCheckLevel < 1) return false;
 	debug("Alright then, it's a valid plist :)\n");
@@ -123,6 +136,7 @@ int plist_isValid(PLIST *plist){
 int plist_text2node(PLIST *plist, PLIST_NODE *prev, NODE_TYPE type){
 	debug("\n");
 	if(*(plist->data) != '<'){
+		debug("invalid node (marker is '%c', expected '<')\n", *(plist->data));
 		return false;
 	}
 	PLIST_NODE *node = zalloc(sizeof(PLIST_NODE));
@@ -133,17 +147,12 @@ int plist_text2node(PLIST *plist, PLIST_NODE *prev, NODE_TYPE type){
 	} else {
 		switch(type){
 			case NODE_RIGHT:
-				debug("setting next node\n");
 				prev->next = node;
-				debug("setting prev node\n");
 				node->prev = prev;
-				debug("copying parent node\n");
 				node->parent = prev->parent;
 				break;
 			case NODE_CHILD:
-				debug("setting child node\n");
 				prev->children = node;
-				debug("setting parent node\n");
 				node->parent = prev;
 				break;
 			case NODE_LEFT:
@@ -159,22 +168,28 @@ int plist_text2node(PLIST *plist, PLIST_NODE *prev, NODE_TYPE type){
 	if(tagNameSize <= 0){
 		return false;
 	}
+	tagNameSize--;
 	
 	plist_fseek(plist, -tagNameSize, SEEK_CUR);
-	char *tagName = zalloc(tagNameSize);
+	char *tagName = zalloc(tagNameSize + 1);
 	strncpy(tagName, plist->data, tagNameSize);
 	debug("Tag: %s\n", tagName);
 	node->tagName = tagName;
 	plist_fseek(plist, tagNameSize, SEEK_CUR);
-	int countentSize = PLIST_READTO(plist, "<");
+	int contentSize = PLIST_READTO(plist, "<");
+	if(contentSize < 0){
+		return false;
+	}
+	contentSize--;
+	
 	if(plist_fgetc(plist) != '/'){ //it's not tag end. a children starts
 		debug("child node detected\n");
 		plist_fseek(plist, -1, SEEK_CUR);
 		plist_text2node(plist, node, NODE_CHILD);
 	} else {
-		plist_fseek(plist, -(1+countentSize), SEEK_CUR);
-		char *textContent = zalloc(countentSize);
-		strncpy(textContent, plist->data, countentSize);
+		plist_fseek(plist, -1-contentSize, SEEK_CUR);
+		char *textContent = zalloc(contentSize + 1);
+		strncpy(textContent, plist->data, contentSize);
 		debug("Content: %s\n", textContent);
 		node->textContent = textContent;
 	}
@@ -300,7 +315,6 @@ size_t getFileSize(int fd){
 
 int plist_open(const char *filename, PLIST *plist){
 	FILE *file;
-	
 	file = fopen(filename, "r");
 	if(!file){
 		debug("open fail\n");
@@ -311,7 +325,7 @@ int plist_open(const char *filename, PLIST *plist){
 		debug("size inval\n");
 		goto clean_return;
 	}
-	plist->data = malloc(plist->size);
+	plist->data = zalloc(plist->size);
 	if(!plist->data){
 		debug("malloc fail\n");
 		goto clean_return;

@@ -64,6 +64,8 @@ int plist_text2node(PLIST *plist, PLIST_NODE *prev, NODE_TYPE type);
 int plist_open(const char *filename, PLIST *plist);
 int plist_isvalid(PLIST *plist);
 int plist_close(PLIST *plist);
+void PLIST_SET_DEBUG(int value);
+void PLIST_FORCE_LOAD(int value);
 PLIST_NODE *plist_getNodeByTagName(PLIST *plist, const char *tagName, PLIST_NODE *prev);
 PLIST_NODE *plist_getNodeByTextContent(PLIST *plist, const char *textContent, PLIST_NODE *prev);
 PLIST_NODE *plist_getNodeByKey(PLIST *plist, const char *tagName, PLIST_NODE *prev);
