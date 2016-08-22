@@ -1,6 +1,5 @@
 /*
  * Copyright 2016 Smx (smxdev4@gmail.com)
- * !! This code is not in the best shape !!
  */
 if(process.argv.length < 3){
 	console.error("== EcOS firmware dumper via serial console (Linksys EPC3208G) ==");
